@@ -3,8 +3,6 @@ using System.Collections;
 
 public class MouseController : MonoBehaviour {
 
-	//public float jetpackForce = 75.0f;
-
 	public float forwardMovementSpeed = 3.0f;
 
 	public Transform groundCheckTransform;
@@ -24,21 +22,19 @@ public class MouseController : MonoBehaviour {
 	public Texture2D coinIconTexture;
 
 	public AudioClip coinCollectSound;
-
 	public AudioSource jetpackAudio;
-	
 	public AudioSource footstepsAudio;
 
 	public ParallaxScroll parallax;
 
-	public NewArduinoManager arduinoManager;
-
 	public float jetpackForce = 0.0f;
+
+	//reference to an instance of NewArduinoManger that reads bentroller values from Ardunio
+	public NewArduinoManager arduinoManager;
 
 	// Use this for initialization
 	void Start () {
 		animator = GetComponent<Animator>();
-		arduinoManager = GetComponent<NewArduinoManager> ();
 	}
 	
 	// Update is called once per frame
@@ -66,10 +62,9 @@ public class MouseController : MonoBehaviour {
 
 		jetpackActive = jetpackActive && !dead;
 
-		float.TryParse (arduinoManager.bendValues [1], out jetpackForce);
+		//float.TryParse (arduinoManager.bendValues [1], out jetpackForce);
+		jetpackForce = arduinoManager.floatBendValues[1];
 
-        //
-		
 		if (jetpackActive)
 		{
 			GetComponent<Rigidbody2D>().AddForce(new Vector2(0, jetpackForce * 0.5f));

@@ -6,23 +6,26 @@ using System.Collections.Generic;
 using UnityEditor;
 
 public class NewArduinoManager : MonoBehaviour {
-	public static string serialName = "COM4";
+	public static string serialName = "COM3";  //might change, check the Arduino IDE
 	public SerialPort mySPort = new SerialPort(serialName, 9600);
-
-	public bool lerpMode = true;
-	private float[] previousBendValues = new float[2];
-
 
 	private bool calibrateComplete = false;
 	public float bend1Av = 0f;
 	public float bend2Av = 0f;
 	private int currentCalibrationFrame = 0;
 	private const int calibrationFrames = 10;
+	private float[] restValues = {0, 0};
+	private const float stateCushionValue = 50f;
 
-	public int[] buttons = new int[6];
+	public bool lerpMode = true;  //if true the script will do a soothing filter using the previous bend value
+	private float[] previousBendValues = new float[2];
 
-	public string[] bendValues = new string[2];
-	string[] buttonValues = new string[6];
+	string[] buttonValues = new string[6];  //stores the button values read from the Arduino
+	public int[] intButtonValues = new int[6];  //stores the parsed button values
+
+	string[] bendValues = new string[2];  //stores the button values read from the Arduino
+	public float[] floatBendValues = new float[2];  //stores the parsed bend values
+
 
 //	public enum CustomGamepadButton
 //	{
@@ -53,83 +56,94 @@ public class NewArduinoManager : MonoBehaviour {
 //		gamepadButtons.Add (new ControllerButton(CustomGamepadButton.SELECT)); 
 	}
 
-	void Update()
-	{
+void Update() {
+
+	if (!mySPort.IsOpen) {
+		mySPort.Open ();
+	}
+	
+	if (mySPort.ReadLine () != null) {//something is ready for read
+
 		//Calibrating the bends with 'C' ?
-		if (mySPort.ReadLine () != null) {
-			if (Input.GetKeyDown (KeyCode.C)) {
-				if (calibrateComplete) {
-					calibrateComplete = false;
-					bend1Av = 0;
-					bend2Av = 0;
-					currentCalibrationFrame = 0;  
-				}
+		if (Input.GetKeyDown (KeyCode.C)) {
+			if (calibrateComplete) {
+				calibrateComplete = false;
+				bend1Av = 0;
+				bend2Av = 0;
+				currentCalibrationFrame = 0;  
 			}
-
-			string serialValue = mySPort.ReadLine ();
-			string[] serialValues = serialValue.Split ('&');
-
-			if (serialValues.Length > 1) {
-
-				string[] allValues = serialValues [1].Split (',');
-
-
-				for (int i = 0; i < 2; i++) {
-
-						bendValues [i] = allValues [i];
-				}
-
-				for (int i = 2; i < 8; i++) {
-
-						buttonValues [i - 2] = allValues [i];
-				}
-		
-				for (int i = 0; i < 6; i++) {
-					buttons [i] = int.Parse (buttonValues [i]);
-				}
-			
-				float[] floatBendValues = new float[bendValues.Length];
-
-				for (int j = 0; j < (bendValues.Length); j++) {
-					if (j == (bendValues.Length - 1)) {
-						bendValues [j] = bendValues [j].Substring (0, bendValues [j].Length - 1);
-					}
-
-					if (lerpMode) {
-						float currentVal = float.Parse (bendValues [j]);
-						previousBendValues [j] = Mathf.Lerp (previousBendValues [j], currentVal, 0.5f);
-					} else {
-						previousBendValues [j] = float.Parse (bendValues [j]);
-					}
-						
-					float greenVal = Mathf.Abs ((1024f / 2f) - previousBendValues [j]);
-					floatBendValues [j] = (1024f / 2f) - previousBendValues [j];
-				}
-
-				if (calibrateComplete) {
-//					CheckBendStatus (floatBendValues);
-				} else {
-					CalibrateController (floatBendValues);
-
-					//DEBUG STUFF
-					float calibrationProgress = (float)currentCalibrationFrame / (float)calibrationFrames;
-					calibrationProgress *= 100f;
-					string progressTemp = "Calibrating...";
-					progressTemp += calibrationProgress;
-					progressTemp += "%";
-//					Debug.Log (progressTemp);
-
-				}
-			}
-		
 		}
+
+		//read the string from the Arduino, formatted like this:
+		//&<bendValue1>,<bendValue2>,<button0status>,<button1status>,<button2status>,<button3status>,<button4status>,<button5status>
+		string serialValue = mySPort.ReadLine ();
+		string[] serialValues = serialValue.Split ('&');
+
+		if (serialValues.Length > 1) {
+
+			////////////////////////////
+			/// split the values and put them to the appropriate string arrays
+			///////////////////////////
+			string[] allValues = serialValues [1].Split (',');
+
+			//first two values are from the bend sensors
+			for (int i = 0; i < 2; i++) {
+					bendValues [i] = allValues [i];
+			}
+
+			//remaining six values are from the buttons
+			for (int i = 2; i < 8; i++) {
+					buttonValues [i - 2] = allValues [i];
+			}
+
+			////////////////////////////
+			/// convert/parse the values in the appropriate string arrays and put them into arrays of the correct type
+			///////////////////////////
+			//button values are represented by integers 0(LOW) and 1(HIGH), check the Arduino code for sure
+			for (int i = 0; i < 6; i++) {
+				intButtonValues [i] = int.Parse (buttonValues [i]);
+			}
+		
+			//bend values are presented by float ranging from 0 to 1024
+			for (int j = 0; j < (bendValues.Length); j++) {
+				/*if (j == (bendValues.Length - 1)) {
+					bendValues [j] = bendValues [j].Substring (0, bendValues [j].Length - 1);
+				}*/
+
+				if (lerpMode) {
+					float currentVal = float.Parse (bendValues [j]);
+					previousBendValues [j] = Mathf.Lerp (previousBendValues [j], currentVal, 0.5f);
+				} else {
+					previousBendValues [j] = float.Parse (bendValues [j]);
+				}
+					
+				//float greenVal = Mathf.Abs ((1024f / 2f) - previousBendValues [j]);
+				floatBendValues [j] = (1024f / 2f) - previousBendValues [j];
+			}
+
+			if (calibrateComplete) {
+//					CheckBendStatus (floatBendValues);
+			} else {
+				CalibrateController (floatBendValues);
+
+				//DEBUG STUFF
+				float calibrationProgress = (float)currentCalibrationFrame / (float)calibrationFrames;
+				calibrationProgress *= 100f;
+				string progressTemp = "Calibrating...";
+				progressTemp += calibrationProgress;
+				progressTemp += "%";
+
+			}
+		}
+	
+	}
 //		foreach (ControllerButton button in gamepadButtons)
 //		{
 //			button.Update();
 //		}
 
-		printStuff ();
-	}
+//	printStuff ();
+}
 
 //	public void CheckBendStatus(float[] floatBendValues)
 //	{
@@ -155,11 +169,7 @@ public class NewArduinoManager : MonoBehaviour {
 //		}
 //	}
 
-	private float[] restValues = {0, 0};
-	private const float stateCushionValue = 50f;
-
-	public int GetBendState(float bendValue, int sensor)
-	{
+	public int GetBendState(float bendValue, int sensor) {
 		/*if (bendValue >= (restValues[sensor] - stateCushionValue) && bendValue <= (restValues[sensor] + stateCushionValue))
 		{
 			//rest state
@@ -192,8 +202,9 @@ public class NewArduinoManager : MonoBehaviour {
 		return 0;
 	}
 
-	public void CalibrateController(float[] floatBendValues)
-	{
+	//Find the resting value for the bend sensors and store them in the bend1Av and bend2Av variables
+	//done by finding an average over calibrationFrames number of frames
+	public void CalibrateController(float[] floatBendValues) {
 		currentCalibrationFrame += 1;
 		bend1Av += floatBendValues [0];
 		bend2Av += floatBendValues [1];
@@ -211,19 +222,20 @@ public class NewArduinoManager : MonoBehaviour {
 		}
 	}
 
-	public void printStuff()
-	{
+	//print out the sensor values read and processed by the script
+	//for buttons the values are parsed into 1 or 0, 
+	//for bend the values are parsed into float and shifted to -512 to 512
+	public void printStuff() {
 		for (int i = 0; i < 6; i++) {
-			//print("button= " + buttons [i]);
+			print("processed button"+i+" = " + intButtonValues [i]);
 		}
 
 		for (int i = 0; i < 2; i++) {
-			//print("bend= " + previousBendValues [i]);
+			print("processed bend"+i+" = " + floatBendValues [i]);
 		}
 		//print ("bend1Av= " + bend1Av);
 		//print ("bend2Av= " + bend2Av);
 
-		}
-	
+	}
 
 }
