@@ -15,6 +15,7 @@ public class NewArduinoManager : MonoBehaviour {
 	private int currentCalibrationFrame = 0;
 	private const int calibrationFrames = 10;
 	private float[] restValues = {0, 0};
+	//a buffer value so -/+ this from the restValues is also considered as rest, used to reduce noise
 	private const float stateCushionValue = 50f;
 
 	public bool lerpMode = true;  //if true the script will do a soothing filter using the previous bend value
@@ -56,149 +57,140 @@ public class NewArduinoManager : MonoBehaviour {
 //		gamepadButtons.Add (new ControllerButton(CustomGamepadButton.SELECT)); 
 	}
 
-void Update() {
+	void Update() {
 
-	if (!mySPort.IsOpen) {
-		mySPort.Open ();
-	}
-	
-	if (mySPort.ReadLine () != null) {//something is ready for read
-
-		//Calibrating the bends with 'C' ?
-		if (Input.GetKeyDown (KeyCode.C)) {
-			if (calibrateComplete) {
-				calibrateComplete = false;
-				bend1Av = 0;
-				bend2Av = 0;
-				currentCalibrationFrame = 0;  
-			}
+		if (!mySPort.IsOpen) {
+			mySPort.Open ();
 		}
+		
+		if (mySPort.ReadLine () != null) {//something is ready for read
 
-		//read the string from the Arduino, formatted like this:
-		//&<bendValue1>,<bendValue2>,<button0status>,<button1status>,<button2status>,<button3status>,<button4status>,<button5status>
-		string serialValue = mySPort.ReadLine ();
-		string[] serialValues = serialValue.Split ('&');
-
-		if (serialValues.Length > 1) {
-
-			////////////////////////////
-			/// split the values and put them to the appropriate string arrays
-			///////////////////////////
-			string[] allValues = serialValues [1].Split (',');
-
-			//first two values are from the bend sensors
-			for (int i = 0; i < 2; i++) {
-					bendValues [i] = allValues [i];
+			//Calibrating the bends with 'C' ?
+			if (Input.GetKeyDown (KeyCode.C)) {
+				if (calibrateComplete) {
+					calibrateComplete = false;
+					bend1Av = 0;
+					bend2Av = 0;
+					currentCalibrationFrame = 0;  
+				}
 			}
 
-			//remaining six values are from the buttons
-			for (int i = 2; i < 8; i++) {
-					buttonValues [i - 2] = allValues [i];
-			}
+			//read the string from the Arduino, formatted like this:
+			//&<bendValue1>,<bendValue2>,<button0status>,<button1status>,<button2status>,<button3status>,<button4status>,<button5status>
+			string serialValue = mySPort.ReadLine ();
+			string[] serialValues = serialValue.Split ('&');
 
-			////////////////////////////
-			/// convert/parse the values in the appropriate string arrays and put them into arrays of the correct type
-			///////////////////////////
-			//button values are represented by integers 0(LOW) and 1(HIGH), check the Arduino code for sure
-			for (int i = 0; i < 6; i++) {
-				intButtonValues [i] = int.Parse (buttonValues [i]);
+			if (serialValues.Length > 1) {
+
+				////////////////////////////
+				/// split the values and put them to the appropriate string arrays
+				///////////////////////////
+				string[] allValues = serialValues [1].Split (',');
+
+				//first two values are from the bend sensors
+				for (int i = 0; i < 2; i++) {
+						bendValues [i] = allValues [i];
+				}
+
+				//remaining six values are from the buttons
+				for (int i = 2; i < 8; i++) {
+						buttonValues [i - 2] = allValues [i];
+				}
+
+				////////////////////////////
+				/// convert/parse the values in the appropriate string arrays and put them into arrays of the correct type
+				///////////////////////////
+				//button values are represented by integers 0(LOW) and 1(HIGH), check the Arduino code for sure
+				for (int i = 0; i < 6; i++) {
+					intButtonValues [i] = int.Parse (buttonValues [i]);
+				}
+			
+				//bend values are presented by float ranging from 0 to 1024
+				for (int j = 0; j < (bendValues.Length); j++) {
+					/*if (j == (bendValues.Length - 1)) {
+						bendValues [j] = bendValues [j].Substring (0, bendValues [j].Length - 1);
+					}*/
+
+					if (lerpMode) {
+						float currentVal = float.Parse (bendValues [j]);
+						previousBendValues [j] = Mathf.Lerp (previousBendValues [j], currentVal, 0.5f);
+					} else {
+						previousBendValues [j] = float.Parse (bendValues [j]);
+					}
+						
+					//shift the range to -512 to 512
+					floatBendValues [j] = previousBendValues [j] - (1024f / 2f);
+				}
+
+				if (calibrateComplete) {
+					CheckBendStatus (floatBendValues);
+				} else {
+					CalibrateController (floatBendValues);
+
+					//DEBUG STUFF
+					float calibrationProgress = (float)currentCalibrationFrame / (float)calibrationFrames;
+					calibrationProgress *= 100f;
+					string progressTemp = "Calibrating...";
+					progressTemp += calibrationProgress;
+					progressTemp += "%";
+
+				}
 			}
 		
-			//bend values are presented by float ranging from 0 to 1024
-			for (int j = 0; j < (bendValues.Length); j++) {
-				/*if (j == (bendValues.Length - 1)) {
-					bendValues [j] = bendValues [j].Substring (0, bendValues [j].Length - 1);
-				}*/
-
-				if (lerpMode) {
-					float currentVal = float.Parse (bendValues [j]);
-					previousBendValues [j] = Mathf.Lerp (previousBendValues [j], currentVal, 0.5f);
-				} else {
-					previousBendValues [j] = float.Parse (bendValues [j]);
-				}
-					
-				//float greenVal = Mathf.Abs ((1024f / 2f) - previousBendValues [j]);
-				floatBendValues [j] = (1024f / 2f) - previousBendValues [j];
-			}
-
-			if (calibrateComplete) {
-//					CheckBendStatus (floatBendValues);
-			} else {
-				CalibrateController (floatBendValues);
-
-				//DEBUG STUFF
-				float calibrationProgress = (float)currentCalibrationFrame / (float)calibrationFrames;
-				calibrationProgress *= 100f;
-				string progressTemp = "Calibrating...";
-				progressTemp += calibrationProgress;
-				progressTemp += "%";
-
-			}
 		}
-	
+	//		foreach (ControllerButton button in gamepadButtons)
+	//		{
+	//			button.Update();
+	//		}
+
+	//	printStuff ();
 	}
-//		foreach (ControllerButton button in gamepadButtons)
-//		{
-//			button.Update();
-//		}
 
-//	printStuff ();
-}
-
-//	public void CheckBendStatus(float[] floatBendValues)
-//	{
-//		if (GetBendState (floatBendValues [0], 0) == 0 && GetBendState (floatBendValues [1], 1) == 0) {
-//			//rest state
-//			gestureText.text = "REST";
-//		} else if (GetBendState (floatBendValues [0], 0) == 1 && GetBendState (floatBendValues [1], 1) == 1) {
-//			//bent up
-//			gestureText.text = "BENT UP";
-//		} else if (GetBendState (floatBendValues [0], 0) == -1 && GetBendState (floatBendValues [1], 1) == -1) {
-//			//bent down
-//			gestureText.text = "BENT DOWN";
-//		} else if (GetBendState (floatBendValues [0], 0) != -1 && GetBendState (floatBendValues [1], 1) != 1) {
-//			//twist up
-//			gestureText.text = "TWIST UP";
-//		} else if (GetBendState (floatBendValues [0], 0) != 1 && GetBendState (floatBendValues [1], 1) != -1) {
-//			//twist down
-//			gestureText.text = "TWIST DOWN";
-//		} else {
-//			//error
-//			gestureText.text = "ERROR - NO STATE";
-//			Debug.LogError ("NO STATE - SHOULD NOT GET HERE");
-//		}
-//	}
-
-	public int GetBendState(float bendValue, int sensor) {
-		/*if (bendValue >= (restValues[sensor] - stateCushionValue) && bendValue <= (restValues[sensor] + stateCushionValue))
-		{
+	//A utility function that displays the bend status in a human readible form.
+	//Uses the GetBendState function to help detemining it.
+	//If there is a GUI text component (e.g., gestureText) in the application can also display it there.
+	public void CheckBendStatus(float[] floatBendValues) {
+		if (GetBendState (floatBendValues [0], 0) == 0 && GetBendState (floatBendValues [1], 1) == 0) {
 			//rest state
-			return 0;
-		}
-		else if(bendValue < (restValues[sensor] - stateCushionValue))
-		{
+			//gestureText.text = "REST";
+			Debug.Log("REST");
+		} else if (GetBendState (floatBendValues [0], 0) == 1 && GetBendState (floatBendValues [1], 1) == 1) {
 			//bent up
+			//gestureText.text = "BENT UP";
+			Debug.Log("BENT UP");
+		} else if (GetBendState (floatBendValues [0], 0) == -1 && GetBendState (floatBendValues [1], 1) == -1) {
+			//bent down
+			//gestureText.text = "BENT DOWN";
+			Debug.Log("BENT DOWN");
+		} else if (GetBendState (floatBendValues [0], 0) != -1 && GetBendState (floatBendValues [1], 1) != 1) {
+			//twist up
+			//gestureText.text = "TWIST UP";
+			Debug.Log("TWIST UP");
+		} else if (GetBendState (floatBendValues [0], 0) != 1 && GetBendState (floatBendValues [1], 1) != -1) {
+			//twist down
+			//gestureText.text = "TWIST DOWN";
+			Debug.Log("TWIST DOWN");
+		} else {
+			//error
+			//gestureText.text = "ERROR - NO STATE";
+			Debug.LogError ("NO STATE - SHOULD NOT GET HERE");
+		}
+	}
+
+	//A utility function that determins the state of the bend sensor based on the bendValue
+	//input: the benValue for calculation, the sensor index so the correct calibration value can be applied
+	//output: 0 for rest (no bend), -1 for bent up, 1 for bent down
+	public int GetBendState(float bendValue, int sensor) {
+		//use the statCushionValue to create a buffer window to reduce noise
+		if(bendValue <= (restValues[sensor] - stateCushionValue)) {
+			//bendValue is really small, so the bentroller is bent up
 			return 1;
 		}
-		else if(bendValue > (restValues[sensor] + stateCushionValue))
-		{
-			//bent down
+		else if(bendValue >= (restValues[sensor] + stateCushionValue)) {
+			//bendValue is really big, so the bentroller is bent down
 			return -1;
 		}
-
-		return 2;*/
-
-		if(bendValue <= (restValues[sensor] - stateCushionValue))
-		{
-			//bent up
-			return 1;
-		}
-		else if(bendValue >= (restValues[sensor] + stateCushionValue))
-		{
-			//bent down
-			return -1;
-		}
-
+		//benValue is within the buffer window, treat it as no bend
 		return 0;
 	}
 
@@ -226,15 +218,14 @@ void Update() {
 	//for buttons the values are parsed into 1 or 0, 
 	//for bend the values are parsed into float and shifted to -512 to 512
 	public void printStuff() {
+		//values for buttons
 		for (int i = 0; i < 6; i++) {
 			print("processed button"+i+" = " + intButtonValues [i]);
 		}
-
+		//values for bend sensors
 		for (int i = 0; i < 2; i++) {
 			print("processed bend"+i+" = " + floatBendValues [i]);
 		}
-		//print ("bend1Av= " + bend1Av);
-		//print ("bend2Av= " + bend2Av);
 
 	}
 

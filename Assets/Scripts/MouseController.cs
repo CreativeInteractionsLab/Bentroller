@@ -154,7 +154,7 @@ public class MouseController : MonoBehaviour {
 		if (dead && grounded)
 		{
 			Rect buttonRect = new Rect(Screen.width * 0.35f, Screen.height * 0.45f, Screen.width * 0.30f, Screen.height * 0.1f);
-			if (GUI.Button(buttonRect, "Tap to restart!"))
+			if (GUI.Button(buttonRect, "Lay the controller flat & click to restart!"))
 			{
 				Application.LoadLevel (Application.loadedLevelName);
 			};
