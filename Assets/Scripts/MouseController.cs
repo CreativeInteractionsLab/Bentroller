@@ -28,6 +28,7 @@ public class MouseController : MonoBehaviour {
 	public ParallaxScroll parallax;
 
 	public float jetpackForce = 0.0f;
+	public float bendThreshold = 0f;
 
 	//reference to an instance of NewArduinoManger that reads bentroller values from Ardunio
 	public NewArduinoManager arduinoManager;
@@ -54,7 +55,7 @@ public class MouseController : MonoBehaviour {
 //		}
 		//bool jetpackActive = Input.GetButton("Fire1");
 
-		if (jetpackForce > 50) {
+		if (jetpackForce > bendThreshold) {
 			jetpackActive = true;
 		} else {
 			jetpackActive = false;
@@ -63,7 +64,7 @@ public class MouseController : MonoBehaviour {
 		jetpackActive = jetpackActive && !dead;
 
 		//float.TryParse (arduinoManager.bendValues [1], out jetpackForce);
-		jetpackForce = arduinoManager.floatBendValues[1];
+		jetpackForce = arduinoManager.floatBendValues[0];
 
 		if (jetpackActive)
 		{

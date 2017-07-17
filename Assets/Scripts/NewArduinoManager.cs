@@ -1,13 +1,13 @@
 ﻿using UnityEngine;
 using System.Collections;
+using System.IO;
 using System.IO.Ports;
 using UnityEngine.UI;
 using System.Collections.Generic;
-using UnityEditor;
 
 public class NewArduinoManager : MonoBehaviour {
-	public static string serialName = "COM3";  //might change, check the Arduino IDE
-	public SerialPort mySPort = new SerialPort(serialName, 9600);
+	public static string serialName = "COM";  //might change, check the Arduino IDE
+	public SerialPort mySPort;// = new SerialPort(serialName, 9600);
 
 	private bool calibrateComplete = false;
 	public float bend1Av = 0f;
@@ -44,7 +44,17 @@ public class NewArduinoManager : MonoBehaviour {
 
 	void Start()
 	{
-		mySPort.Open();
+		//keep openning ports until it finds one
+		int i = 3;
+		while (true) {
+			try {
+				mySPort = new SerialPort (serialName + i, 9600);
+				mySPort.Open ();
+			} catch (IOException e) {
+				i++;
+			}
+			break;
+		}
 
 		// initialize the controller dictionary
 //		gamepadButtons.Add (new ControllerButton(CustomGamepadButton.A));
@@ -123,7 +133,8 @@ public class NewArduinoManager : MonoBehaviour {
 				}
 
 				if (calibrateComplete) {
-					CheckBendStatus (floatBendValues);
+					//call the utility function that displays the bend status in a human readible form.
+					//CheckBendStatus (floatBendValues);
 				} else {
 					CalibrateController (floatBendValues);
 
