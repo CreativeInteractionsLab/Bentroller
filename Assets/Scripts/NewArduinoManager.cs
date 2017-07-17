@@ -50,10 +50,10 @@ public class NewArduinoManager : MonoBehaviour {
 			try {
 				mySPort = new SerialPort (serialName + i, 9600);
 				mySPort.Open ();
+				break;
 			} catch (IOException e) {
 				i++;
 			}
-			break;
 		}
 
 		// initialize the controller dictionary
